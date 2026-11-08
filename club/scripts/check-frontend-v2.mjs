@@ -43,3 +43,8 @@ vm.runInContext("ticket={outcome:'none',test_mode:true,prize_amount:0,stamp_earn
 const noPrize=vm.runInContext('renderResult()',context);assert.ok(noPrize.includes('Sigue participando'));assert.ok(!noPrize.includes('$0'));assert.ok(!noPrize.includes('class="code"'));
 const segments=vm.runInContext('wheelSegments()',context);assert.equal(Math.round(segments.reduce((s,p)=>s+p.span,0)),360);assert.ok(segments.some(p=>p.id===4));
 console.log('Four-digit PIN, no-prize result, configurable weight and wheel segments passed.');
+
+vm.runInContext(fs.readFileSync('dist/quick-redemption.js','utf8'),context);
+vm.runInContext("lookup=null;pendingPrizes={total:1,items:[{redeem_code:'GF-LONGCODEAB12',prize_title:'Descuento',prize_amount:300,prize_min:3000,purchase_amount:3000,receipt:'COMPRA-TEST',created_at:'2026-11-08',test_mode:true,quick_redeem:true,prize_kind:'discount'}]};",context);
+const quick=vm.runInContext('renderRedeem()',context);assert.ok(quick.includes('AB12'));assert.ok(quick.includes('Canjear'));assert.ok(!quick.includes('name="code"'));
+console.log('Pending-prize selection does not require manual coupon-code entry.');

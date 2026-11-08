@@ -91,7 +91,11 @@ Deno.serve(async req=>{
    return new Response(JSON.stringify({session}),{headers:cors});
   }
   if(action==='logout'){await admin(b.session);check(await db.from('gf_sessions').delete().eq('token_hash',await hash(b.session)));return new Response('{"ok":true}',{headers:cors});}
-  if(['dashboard','create','lookup','redeem','settings','revoke','members','member_detail','recovery_link','assisted_create','assisted_purchase'].includes(action))await admin(b.session);
+  if(['dashboard','create','lookup','redeem','settings','revoke','members','member_detail','recovery_link','assisted_create','assisted_purchase','pending_prizes'].includes(action))await admin(b.session);
+  if(action==='pending_prizes'){
+   const page=Number(b.page??0),size=Number(b.size??25);if(typeof b.test_mode!=='boolean'||!Number.isInteger(page)||page<0||!Number.isInteger(size)||size<1||size>100)throw new Error('Página no válida');
+   return new Response(JSON.stringify(await rpc('gf_pending_prizes',{p_mode:b.test_mode,p_search:typeof b.search==='string'?b.search.trim().slice(0,100):'',p_page:page,p_size:size})),{headers:cors});
+  }
   if(action==='assisted_create'){
    const name=text(b.name,60),phone=typeof b.phone==='string'?b.phone.replace(/[\s()+-]/g,''):'';
    if(phone&&!/^56[2-9]\d{8}$/.test(phone))throw new Error('Ingresá un teléfono chileno válido o dejalo vacío');
@@ -130,6 +134,7 @@ Deno.serve(async req=>{
     else if(amount(p.min_purchase)<amount(p.amount))throw new Error('El mínimo debe cubrir el descuento');
    }
    if(new Set(b.prizes.map((p:any)=>p.id)).size!==b.prizes.length||!b.prizes.some((p:any)=>p.weight>0))throw new Error('Debe haber al menos un resultado con probabilidad positiva');
+   if(!b.prizes.some((p:any)=>p.id!==4&&p.weight>0&&p.min_purchase<=min&&p.amount<=budget))throw new Error('El mínimo para girar debe habilitar al menos un premio. Bajá el mínimo de un premio o aumentá el mínimo del giro');
    const current=check(await db.from('gf_config').select(configFields).eq('id',true).single());
    const config={...current,test_mode:b.test_mode,min_purchase:min,validity_days:days,daily_budget:budget};
    for(const key of Object.keys(current).filter(k=>k.startsWith('stamp_')))if(b[key]!==undefined)config[key]=b[key];

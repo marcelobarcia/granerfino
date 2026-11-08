@@ -1,5 +1,14 @@
 # Club Granero Fino · v4
 
+## Canje rápido y giro con posibilidad de premio
+
+- Caja → Canjear premio abre una lista paginada de premios pendientes. Se puede buscar por nombre, número de socio, folio o referencia corta (últimos 4 caracteres). Elegir y confirmar usa el código completo internamente y marca el premio como usado. El operador aplica el descuento en Odoo; esta app no modifica el POS.
+- Las condiciones anteriores que requieren otra compra conservan el formulario de comprobante y monto. Los premios nuevos de la compra actual usan los datos ya registrados, sin transcribir código ni monto.
+- El cliente ve una referencia corta de 4 caracteres; el código completo queda disponible en un detalle desplegable.
+- Se corrigió el caso de compra de prueba de $3.000 con todos los premios por encima de $7.000: el descuento base de prueba de $300 se habilitó desde el mínimo de giro ($3.000). Los demás mínimos se conservan.
+- Configuración exige al menos un premio con probabilidad positiva alcanzable desde el mínimo de giro y dentro del presupuesto. Si una compra no tiene ninguna posibilidad de premio (por monto o presupuesto), se rechaza el giro sin consumirlo, en lugar de forzar “Sigue participando”.
+- Migración: `entry-prize-and-pending.sql`. Prueba transaccional revertida: `scripts/check-pending-redemption.sql`.
+
 ## Cambios v4: premio inmediato, resultado sin premio y audio
 
 - Los folios de compra se generan automáticamente al crear QR o registrar una compra asistida. El comprobante real es opcional; si se carga, evita duplicar el giro de ese comprobante. El cupón ganador también se genera automáticamente en servidor y se ve inmediatamente, antes de registrarse. “Sigue participando” no emite cupón.
