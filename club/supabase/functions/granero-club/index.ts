@@ -91,7 +91,7 @@ Deno.serve(async req=>{
    return new Response(JSON.stringify({session}),{headers:cors});
   }
   if(action==='logout'){await admin(b.session);check(await db.from('gf_sessions').delete().eq('token_hash',await hash(b.session)));return new Response('{"ok":true}',{headers:cors});}
-  if(['dashboard','create','lookup','redeem','settings','revoke','members','member_detail','recovery_link','assisted_create','assisted_purchase','pending_prizes','cashier_visit'].includes(action))await admin(b.session);
+  if(['dashboard','create','lookup','redeem','settings','revoke','members','member_detail','recovery_link','assisted_create','assisted_purchase','pending_prizes','cashier_visit','adjust_stamps'].includes(action))await admin(b.session);
   if(action==='pending_prizes'){
    const page=Number(b.page??0),size=Number(b.size??25);if(typeof b.test_mode!=='boolean'||!Number.isInteger(page)||page<0||!Number.isInteger(size)||size<1||size>100)throw new Error('Página no válida');
    return new Response(JSON.stringify(await rpc('gf_pending_prizes',{p_mode:b.test_mode,p_search:typeof b.search==='string'?b.search.trim().slice(0,100):'',p_page:page,p_size:size})),{headers:cors});
@@ -200,6 +200,10 @@ Deno.serve(async req=>{
    const page=Number(b.page??0),size=Number(b.size??25);if(!Number.isInteger(page)||page<0||!Number.isInteger(size)||size<1||size>500||typeof b.test_mode!=='boolean')throw new Error('Página no válida');
    const search=typeof b.search==='string'?b.search.trim().slice(0,100):'';
    return new Response(JSON.stringify(await rpc('gf_members',{p_search:search,p_mode:b.test_mode,p_marketing:b.marketing===true,p_page:page,p_size:size})),{headers:cors});
+  }
+  if(action==='adjust_stamps'){
+   if(typeof b.test_mode!=='boolean'||!Number.isInteger(b.expected)||!Number.isInteger(b.target))throw new Error('Revisá los sellos');
+   return new Response(JSON.stringify(await rpc('gf_adjust_stamps',{p_member:text(b.member_id,36),p_mode:b.test_mode,p_card:b.card_id||null,p_expected:b.expected,p_target:b.target,p_reason:text(b.reason,200),p_staff:await hash(b.session)})),{headers:cors});
   }
   if(action==='member_detail'){
    const id=text(b.member_id,36);if(!/^[a-f0-9-]{36}$/i.test(id)||typeof b.test_mode!=='boolean')throw new Error('Miembro no válido');
