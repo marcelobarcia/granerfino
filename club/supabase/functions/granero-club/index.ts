@@ -155,9 +155,8 @@ Deno.serve(async req=>{
    return new Response('{"ok":true}',{headers:cors});
   }
   if(action==='create'){
-   const receipt=typeof b.receipt==='string'&&b.receipt.trim()?text(b.receipt,60):'COMPRA-'+token().slice(0,12).toUpperCase(),purchase=amount(b.amount),c=check(await db.from('gf_config').select('*').eq('id',true).single());
-   if(purchase<c.min_purchase)throw new Error('La compra no alcanza el mínimo para girar');
-   const t=token();const r=await db.from('gf_tickets').insert({token_hash:await hash(t),receipt,purchase_amount:purchase,test_mode:c.test_mode,expires_at:new Date(Date.now()+7*86400000).toISOString()});
+   const receipt=typeof b.receipt==='string'&&b.receipt.trim()?text(b.receipt,60):'COMPRA-'+token().slice(0,12).toUpperCase(),purchase=0,c=check(await db.from('gf_config').select('*').eq('id',true).single());
+   const t=token();const r=await db.from('gf_tickets').insert({token_hash:await hash(t),receipt,purchase_amount:purchase,cashier_verified:true,test_mode:c.test_mode,expires_at:new Date(Date.now()+7*86400000).toISOString()});
    if(r.error?.code==='23505')throw new Error('Ese comprobante ya tiene un QR. No se generó otro');check(r);
    return new Response(JSON.stringify({token:t,test_mode:c.test_mode,receipt}),{headers:cors});
   }
