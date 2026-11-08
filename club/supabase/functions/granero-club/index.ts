@@ -186,7 +186,7 @@ Deno.serve(async req=>{
    const name=text(b.name,60),phone=customerPhone(b.phone);
    if(b.terms!==true)throw new Error('Aceptá las condiciones para guardar el premio');
    const existing=check(await db.from('gf_wallets').select('member_id').eq('token_hash',wh).maybeSingle());
-   const extra:any={};if(b.pin!==undefined||!existing){const pin=customerPin(b.pin),salt=token();extra.customer_pin_hash=await passwordHash(pin,salt);extra.customer_pin_salt=salt;}
+   const extra:any={};if(typeof b.pin==='string'&&b.pin.trim()){const pin=customerPin(b.pin),salt=token();extra.customer_pin_hash=await passwordHash(pin,salt);extra.customer_pin_salt=salt;}
    check(await db.from('gf_wallets').upsert({token_hash:wh,name,phone,marketing:b.marketing===true,terms_version:'v1',registration_test_mode:t.test_mode,...extra}));
    return new Response('{"ok":true}',{headers:cors});
   }
