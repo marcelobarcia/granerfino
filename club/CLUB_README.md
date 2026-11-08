@@ -1,4 +1,16 @@
-# Club Granero Fino · v1
+# Club Granero Fino · v2
+
+## Actualización: tarjeta, parametría y miembros
+
+- Caja → Configuración: activa o pausa sellos, define objetivo (2–20), compra mínima por sello, reinicio de tarjeta, tipo de premio especial (descuento o producto), descripción, monto del descuento, mínimo de canje y vigencia (1–365 días). Los valores iniciales son ejemplos de prueba, no una política comercial aprobada.
+- Cada giro nuevo válido suma como máximo un sello, automáticamente y dentro de la misma transacción que entrega el descuento. Un QR repetido no agrega otro sello. Si la compra alcanza para la ruleta pero no para el mínimo de la tarjeta, no suma sello.
+- Al completar la tarjeta se genera un único premio especial, disponible en Mis premios con código `GC-…`; los de la ruleta conservan `GF-…`. Configuración inicial de prueba: 5 sellos, mínimo $3.000 por sello, premio especial de descuento $1.500 en nueva compra desde $15.000, vigencia 30 días, reinicio habilitado.
+- Cada tarjeta conserva sus reglas y su premio desde el primer sello. Cambios se aplican a tarjetas nuevas; pausar sellos no borra avances. No hay retroactividad sobre giros anteriores a esta actualización. Las tarjetas de prueba y reales se acumulan por separado. Si una tarjeta se definió sin reinicio, termina el recorrido al completarse.
+- Los premios especiales se presupuestan aparte: el límite diario existente reserva únicamente descuentos de la ruleta. Un único beneficio por comprobante se controla mediante un registro común entre cupones y premios especiales. Los productos se entregan y registran manualmente en Odoo.
+- Caja → Miembros: lista paginada, búsqueda por nombre o teléfono, filtro por consentimiento de novedades, ficha con tarjeta y premios, exportación CSV de la búsqueda completa. El modo de prueba/real filtra la lista. Los identificadores de acceso secreto nunca se exponen al panel.
+- El frontend ahora usa también `dist/club-v2.js`; copiarlo junto al HTML si se aloja en GitHub Pages.
+- Para una instalación nueva: aplicar `supabase/sql/schema.sql`, `defaults.sql`, `loyalty-v2.sql` y `loyalty-v2-card-order.sql`, en ese orden. La actualización fue aplicada a la instancia existente sin reemplazar datos ni accesos.
+- Pruebas adicionales: `scripts/check-loyalty-v2.mjs` (API con sesión temporal por stdin), `scripts/check-loyalty-transactions.sql` (reglas, cambios durante una tarjeta y producto; todo revertido), `scripts/check-frontend-v2.mjs` (campos, tarjetas completas, premios producto y escape de HTML).
 
 Primera versión: compra → QR único → ruleta → registro breve → Mis premios → canje en caja.
 
