@@ -27,6 +27,16 @@ async function walletContent(wh:string){
 const safeTicket=(t:any)=>{const {token_hash,wallet_hash,...rest}=t;return rest;};
 async function rpc(name:string,args:any){return check(await db.rpc(name,args));}
 async function admin(s:unknown){const h=await hash(capability(s));const row=check(await db.from('gf_sessions').select('expires_at').eq('token_hash',h).maybeSingle());if(!row||new Date(row.expires_at)<new Date())throw new Error('Ingresá de nuevo a Caja');}
+function customerPin(v:unknown){if(typeof v!=='string'||!/^\d{6}$/.test(v))throw new Error('El PIN debe tener exactamente 6 números');return v;}
+function customerPhone(v:unknown){const p=text(v,20).replace(/[\s()+-]/g,'');if(!/^569\d{8}$/.test(p))throw new Error('Ingresá un celular chileno: +56 9 y ocho dígitos');return p;}
+async function resolveWallet(v:unknown){
+ const h=await hash(capability(v));const s=check(await db.from('gf_customer_sessions').select('wallet_hash,expires_at').eq('token_hash',h).maybeSingle());
+ if(s){if(new Date(s.expires_at)<new Date())throw new Error('Ingresá de nuevo con tu celular y PIN');return s.wallet_hash;}
+ const w=check(await db.from('gf_wallets').select('legacy_access_enabled').eq('token_hash',h).maybeSingle());
+ if(w&&!w.legacy_access_enabled)throw new Error('Este acceso fue reemplazado. Ingresá con tu celular y PIN');
+ return h;
+}
+async function customerSession(wh:string){const t=token();check(await db.from('gf_customer_sessions').insert({token_hash:await hash(t),wallet_hash:wh,expires_at:new Date(Date.now()+180*86400000).toISOString()}));return t;}
 
 Deno.serve(async req=>{
  if(req.method==='OPTIONS')return new Response(null,{headers:cors});
@@ -36,6 +46,31 @@ Deno.serve(async req=>{
   const raw=await req.text();if(raw.length>12000)throw new Error('Solicitud demasiado grande');
   const b=JSON.parse(raw), action=b.action;
   const ip=req.headers.get('cf-connecting-ip')||req.headers.get('x-forwarded-for')?.split(',')[0]||'unknown';
+  if(['customer_login','recover_finish'].includes(action)&&!await rpc('gf_rate',{p_key:'customer-ip:'+await hash(ip),p_limit:20,p_seconds:900}))throw new Error('Demasiados intentos. Esperá 15 minutos');
+  if(action==='customer_login'){
+   const phone=customerPhone(b.phone),pin=customerPin(b.pin);
+   if(!await rpc('gf_rate',{p_key:'customer-phone:'+await hash(phone),p_limit:5,p_seconds:900}))throw new Error('Demasiados intentos. Esperá 15 minutos o pedí ayuda en la tienda');
+   const rows=check(await db.from('gf_wallets').select('token_hash,name,created_at,customer_pin_hash,customer_pin_salt').eq('phone',phone).not('customer_pin_hash','is',null).order('created_at').limit(20));
+   const matches=[];
+   for(const w of rows)if(await passwordHash(pin,w.customer_pin_salt)===w.customer_pin_hash)matches.push({name:w.name,created_at:w.created_at,token:await customerSession(w.token_hash)});
+   if(!matches.length)throw new Error('No pudimos ingresar con esos datos. Revisá tu celular y PIN o pedí ayuda en la tienda');
+   return new Response(JSON.stringify({accounts:matches}),{headers:cors});
+  }
+  if(action==='customer_pin'){
+   const wh=await resolveWallet(b.wallet),pin=customerPin(b.pin),salt=token();
+   const rows=check(await db.from('gf_wallets').update({customer_pin_hash:await passwordHash(pin,salt),customer_pin_salt:salt}).eq('token_hash',wh).select('member_id'));
+   if(!rows.length)throw new Error('Primero guardá tu premio para ser miembro del club');
+   return new Response('{"ok":true}',{headers:cors});
+  }
+  if(action==='customer_logout'){
+   check(await db.from('gf_customer_sessions').delete().eq('token_hash',await hash(capability(b.wallet))));
+   return new Response('{"ok":true}',{headers:cors});
+  }
+  if(action==='recover_finish'){
+   const pin=customerPin(b.pin),salt=token(),s=token();
+   await rpc('gf_finish_recovery',{p_token:await hash(capability(b.recovery)),p_pin:await passwordHash(pin,salt),p_salt:salt,p_session:await hash(s)});
+   return new Response(JSON.stringify({token:s}),{headers:cors});
+  }
   if(['login','setup'].includes(action)&&!await rpc('gf_rate',{p_key:'login:'+await hash(ip),p_limit:12,p_seconds:900}))throw new Error('Demasiados intentos. Esperá 15 minutos');
   if(action==='config'){
    const c=check(await db.from('gf_config').select(configFields).eq('id',true).single());
@@ -56,7 +91,29 @@ Deno.serve(async req=>{
    return new Response(JSON.stringify({session}),{headers:cors});
   }
   if(action==='logout'){await admin(b.session);check(await db.from('gf_sessions').delete().eq('token_hash',await hash(b.session)));return new Response('{"ok":true}',{headers:cors});}
-  if(['dashboard','create','lookup','redeem','settings','revoke','members','member_detail'].includes(action))await admin(b.session);
+  if(['dashboard','create','lookup','redeem','settings','revoke','members','member_detail','recovery_link','assisted_create','assisted_purchase'].includes(action))await admin(b.session);
+  if(action==='assisted_create'){
+   const name=text(b.name,60),phone=typeof b.phone==='string'?b.phone.replace(/[\s()+-]/g,''):'';
+   if(phone&&!/^56[2-9]\d{8}$/.test(phone))throw new Error('Ingresá un teléfono chileno válido o dejalo vacío');
+   if(b.consent!==true)throw new Error('Confirmá que el cliente acepta registrarse en el club');
+   const c=check(await db.from('gf_config').select('test_mode').eq('id',true).single());
+   const w=check(await db.from('gf_wallets').insert({token_hash:await hash(token()),name,phone,marketing:b.marketing===true,assisted:true,registration_test_mode:c.test_mode}).select('member_id,member_code,name,phone').single());
+   return new Response(JSON.stringify(w),{headers:cors});
+  }
+  if(action==='assisted_purchase'){
+   const id=text(b.member_id,36);if(!/^[a-f0-9-]{36}$/i.test(id))throw new Error('Miembro no válido');
+   const w=check(await db.from('gf_wallets').select('token_hash,name,member_code').eq('member_id',id).maybeSingle());
+   if(!w)throw new Error('Miembro no encontrado');
+   const result=await rpc('gf_assisted_purchase',{p_wallet:w.token_hash,p_receipt:text(b.receipt,60),p_amount:amount(b.amount),p_token:await hash(token()),p_random:crypto.getRandomValues(new Uint32Array(1))[0]/4294967296,p_code:'GF-'+token().slice(0,12).toUpperCase()});
+   return new Response(JSON.stringify({...result,name:w.name,member_code:w.member_code}),{headers:cors});
+  }
+  if(action==='recovery_link'){
+   if(b.verified!==true)throw new Error('Verificá al cliente y el control del celular registrado antes de generar el enlace');
+   const id=text(b.member_id,36);if(!/^[a-f0-9-]{36}$/i.test(id))throw new Error('Miembro no válido');
+   const w=check(await db.from('gf_wallets').select('token_hash,phone,name').eq('member_id',id).maybeSingle());
+   if(!w)throw new Error('Miembro no encontrado');if(!/^569\d{8}$/.test(w.phone))throw new Error('Este miembro no tiene celular registrado. Su cuenta se gestiona desde Caja');const t=token();await rpc('gf_make_recovery',{p_wallet:w.token_hash,p_token:await hash(t)});
+   return new Response(JSON.stringify({recovery:t,phone:w.phone,name:w.name,expires_minutes:15}),{headers:cors});
+  }
   if(action==='dashboard'){
    const config=check(await db.from('gf_config').select(configFields).eq('id',true).single());
    const prizes=check(await db.from('gf_prizes').select('*').order('id'));
@@ -96,29 +153,32 @@ Deno.serve(async req=>{
   if(action==='ticket'){
    const t=check(await db.from('gf_tickets').select('*').eq('token_hash',await hash(capability(b.token))).maybeSingle());
    if(!t||t.revoked)throw new Error('Este QR no está disponible');
-   const same=b.wallet&&t.wallet_hash===await hash(capability(b.wallet));
+   const same=b.wallet&&t.wallet_hash===await resolveWallet(b.wallet);
    if(t.spun_at&&!same)throw new Error('Este QR ya fue utilizado');
    return new Response(JSON.stringify({...safeTicket(t),...await rpc('gf_stamp_info',{p_token:await hash(b.token)})}),{headers:cors});
   }
   if(action==='spin'){
    const random=crypto.getRandomValues(new Uint32Array(1))[0]/4294967296;
    const code='GF-'+token().slice(0,12).toUpperCase();
-   const result=await rpc('gf_spin',{p_token:await hash(capability(b.token)),p_wallet:await hash(capability(b.wallet)),p_random:random,p_code:code});
-   const registered=check(await db.from('gf_wallets').select('member_id').eq('token_hash',await hash(b.wallet)).maybeSingle());
+   const wh=await resolveWallet(b.wallet);
+   const result=await rpc('gf_spin',{p_token:await hash(capability(b.token)),p_wallet:wh,p_random:random,p_code:code});
+   const registered=check(await db.from('gf_wallets').select('member_id').eq('token_hash',wh).maybeSingle());
    return new Response(JSON.stringify({...result,registered:!!registered}),{headers:cors});
   }
   if(action==='claim'){
-   const th=await hash(capability(b.token)),wh=await hash(capability(b.wallet));
+   const th=await hash(capability(b.token)),wh=await resolveWallet(b.wallet);
    const t=check(await db.from('gf_tickets').select('wallet_hash,spun_at,revoked').eq('token_hash',th).single());
    if(!t.spun_at||t.revoked||t.wallet_hash!==wh)throw new Error('Primero girá la ruleta con tu QR');
-   const name=text(b.name,60),phone=text(b.phone,20).replace(/[\s()+-]/g,'');
-   if(!/^569\d{8}$/.test(phone))throw new Error('Ingresá un celular chileno: +56 9 y ocho dígitos');
+   const name=text(b.name,60),phone=customerPhone(b.phone);
    if(b.terms!==true)throw new Error('Aceptá las condiciones para guardar el premio');
-   check(await db.from('gf_wallets').upsert({token_hash:wh,name,phone,marketing:b.marketing===true,terms_version:'v1'}));
+   const existing=check(await db.from('gf_wallets').select('member_id').eq('token_hash',wh).maybeSingle());
+   const extra:any={};if(b.pin!==undefined||!existing){const pin=customerPin(b.pin),salt=token();extra.customer_pin_hash=await passwordHash(pin,salt);extra.customer_pin_salt=salt;}
+   check(await db.from('gf_wallets').upsert({token_hash:wh,name,phone,marketing:b.marketing===true,terms_version:'v1',registration_test_mode:t.test_mode,...extra}));
    return new Response('{"ok":true}',{headers:cors});
   }
   if(action==='wallet'){
-   const wh=await hash(capability(b.wallet));const member=check(await db.from('gf_wallets').select('name,phone').eq('token_hash',wh).maybeSingle());
+   const wh=await resolveWallet(b.wallet);const row=check(await db.from('gf_wallets').select('name,phone,member_code,customer_pin_hash').eq('token_hash',wh).maybeSingle());
+   const member=row?{name:row.name,phone:row.phone,member_code:row.member_code,pin_enabled:!!row.customer_pin_hash}:null;
    const content=member?await walletContent(wh):{tickets:[],cards:[]};
    return new Response(JSON.stringify({member,...content}),{headers:cors});
   }
@@ -129,7 +189,7 @@ Deno.serve(async req=>{
   }
   if(action==='member_detail'){
    const id=text(b.member_id,36);if(!/^[a-f0-9-]{36}$/i.test(id)||typeof b.test_mode!=='boolean')throw new Error('Miembro no válido');
-   const w=check(await db.from('gf_wallets').select('token_hash,member_id,name,phone,marketing,created_at').eq('member_id',id).maybeSingle());
+   const w=check(await db.from('gf_wallets').select('token_hash,member_id,member_code,assisted,name,phone,marketing,created_at').eq('member_id',id).maybeSingle());
    if(!w)throw new Error('Miembro no encontrado');
    const content=await walletContent(w.token_hash);const {token_hash,...member}=w;
    return new Response(JSON.stringify({member,tickets:content.tickets.filter((t:any)=>t.test_mode===b.test_mode),cards:content.cards.filter((c:any)=>c.test_mode===b.test_mode)}),{headers:cors});

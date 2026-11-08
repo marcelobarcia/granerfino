@@ -1,4 +1,14 @@
-# Club Granero Fino · v2
+# Club Granero Fino · v3
+
+## Sonidos, acceso de clientes y atención sin celular
+
+- `sounds.js` sintetiza sonidos localmente con Web Audio: clics que desaceleran durante el giro y una melodía al mostrar el premio. El sonido solo se habilita por interacción del usuario. Control para silenciar en escritorio y móvil, preferencia guardada por dispositivo. Sin archivos externos ni autoplay al cargar.
+- También hay giro visual y sonoro desde la ficha del miembro en Caja, para clientes que no usan celular.
+- Nuevos registros eligen PIN de seis números. Vuelven con celular y PIN mediante “Ya soy miembro”. Miembros anteriores pueden crear PIN desde Mis premios. El PIN se almacena derivado con PBKDF2; hay límites de intentos por IP y celular.
+- “Olvidé mi PIN” abre ayuda por WhatsApp. Caja → Miembros → Ver ficha → Recuperar acceso genera un enlace de un uso que vence en 15 minutos, después de que el operador verifica al cliente y el control del celular registrado. El mensaje se prepara exclusivamente para ese celular; el operador decide enviarlo. No se envían SMS ni WhatsApp automáticamente. Al usar recuperación se reemplazan accesos anteriores, preservando premios y sellos.
+- “Registrar miembro” en Caja admite nombre y teléfono opcional. Los clientes sin celular reciben un número de socio GF-…; se buscan por nombre o número. Desde la ficha se registra la compra y se gira, usando las mismas reglas y evitando QR adicionales para esa compra. El canje también se inicia desde la ficha.
+- Para una nueva instalación después de v2: `customer-access-schema.sql`, luego `customer-access-functions.sql`. Son copia del esquema y funciones ya aplicados, sin datos de personas ni secretos.
+- Verificación: pruebas de alta con PIN, ingreso por otro acceso, recuperación de un solo uso, revocación, preservación de sellos y operaciones sin teléfono pasaron antes de la publicación interrumpida. La actualización de sonidos agrega `scripts/check-sounds.mjs` y revisión del giro en navegador.
 
 ## Actualización: tarjeta, parametría y miembros
 
@@ -24,7 +34,7 @@ La aplicación se habilitó públicamente por solicitud del propietario. La zona
 - Abrir `?caja=1` para caja. La activación inicial usa un enlace privado de un solo uso; la contraseña de caja se configura allí (mínimo 12 caracteres).
 - Caja carga número de comprobante y monto. Genera un QR de un solo uso; se puede mostrar o compartir el enlace por WhatsApp. No hay envíos automáticos.
 - Cada QR dura siete días. El resultado se calcula en servidor, se guarda una sola vez y resiste doble clic/solicitudes concurrentes.
-- El cliente registra nombre y celular chileno, acepta condiciones y opcionalmente novedades. Se guarda el acceso en ese navegador; puede copiar un enlace personal para otro dispositivo. No hay inicio de sesión ni recuperación por número de teléfono: el enlace secreto es el acceso a los premios. El teléfono no se verifica por SMS.
+- El cliente registra nombre y celular chileno, acepta condiciones y opcionalmente novedades. Se guarda el acceso en ese navegador; puede copiar un enlace personal para otro dispositivo. Ahora los clientes pueden ingresar con celular y PIN de seis números. También conservan acceso por enlace personal. No se envían SMS automáticamente.
 - Caja busca el código, carga el nuevo comprobante y monto y confirma el canje. Debe aplicar el descuento manualmente en Odoo. No hay integración con Odoo en esta versión.
 - Un comprobante genera un giro por modo. Un comprobante nuevo admite un solo cupón del club. No se permite canjear contra la compra que originó el premio.
 - Configuración permite ajustar tres descuentos, mínimos, pesos, vigencia y presupuesto nominal diario. Solo nuevos giros usan reglas actualizadas. Los premios existentes conservan monto, mínimo y vencimiento.
