@@ -14,6 +14,10 @@
 
 Primera versión: compra → QR único → ruleta → registro breve → Mis premios → canje en caja.
 
+## Acceso público y caja
+
+La aplicación se habilitó públicamente por solicitud del propietario. La zona Caja valida usuario `admin` y contraseña en servidor. El alta inicial se completó: el antiguo enlace de activación quedó deshabilitado. La contraseña elegida por el propietario se almacena derivada con PBKDF2 y nunca se incluye en el código o este documento. El modo de prueba se mantiene independiente del acceso público.
+
 ## Uso
 
 - Abrir la aplicación sin parámetros para ver el club y su demostración.

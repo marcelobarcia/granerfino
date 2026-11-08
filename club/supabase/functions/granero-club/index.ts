@@ -49,8 +49,9 @@ Deno.serve(async req=>{
    return new Response(JSON.stringify({ok:true}),{headers:cors});
   }
   if(action==='login'){
+   if(String(b.username||'').trim().toLowerCase()!=='admin')throw new Error('Usuario o contraseña incorrectos');
    const c=check(await db.from('gf_config').select('password_hash,password_salt').eq('id',true).single());
-   if(!c.password_hash||await passwordHash(text(b.password,128),c.password_salt)!==c.password_hash)throw new Error('Contraseña incorrecta o caja sin activar');
+   if(!c.password_hash||await passwordHash(text(b.password,128),c.password_salt)!==c.password_hash)throw new Error('Usuario o contraseña incorrectos');
    const session=token();check(await db.from('gf_sessions').insert({token_hash:await hash(session),expires_at:new Date(Date.now()+12*3600000).toISOString()}));
    return new Response(JSON.stringify({session}),{headers:cors});
   }
