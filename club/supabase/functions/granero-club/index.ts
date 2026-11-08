@@ -127,9 +127,9 @@ Deno.serve(async req=>{
   if(action==='settings'){
    const min=amount(b.min_purchase),days=amount(b.validity_days),budget=amount(b.daily_budget);
    if(days>90||typeof b.test_mode!=='boolean')throw new Error('Configuración no válida');
-   if(!Array.isArray(b.prizes)||![3,4].includes(b.prizes.length))throw new Error('Revisá los resultados de la ruleta');
+   if(!Array.isArray(b.prizes)||![3,4,5].includes(b.prizes.length))throw new Error('Revisá los resultados de la ruleta');
    for(const p of b.prizes){
-    if(![1,2,3,4].includes(p.id)||!Number.isInteger(p.weight)||p.weight<0||p.weight>10000)throw new Error('Revisá las probabilidades');
+    if(![1,2,3,4,5].includes(p.id)||!Number.isInteger(p.weight)||p.weight<0||p.weight>10000)throw new Error('Revisá las probabilidades');
     if(p.id===4){p.amount=0;p.min_purchase=0;p.title='Sigue participando';}
     else if(amount(p.min_purchase)<amount(p.amount))throw new Error('El mínimo debe cubrir el descuento');
    }
