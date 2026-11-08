@@ -1,4 +1,9 @@
 let recoveryToken=new URLSearchParams(location.hash.slice(1)).get('recuperar'),loginAccounts=[];
+function renderWhatsAppHelp(){
+ const phone='56934263907',message='Hola, necesito recuperar el acceso a mi Club Granero Fino.';
+ const query='phone='+phone+'&text='+encodeURIComponent(message);
+ return `<h2>Te ayudamos a volver.</h2><p style="margin:20px 0">Escribinos desde el celular registrado o acercate a la tienda. Verificaremos tu cuenta y te daremos un enlace para elegir un PIN nuevo.</p><a class="btn full" href="https://api.whatsapp.com/send?${query}" target="_top" rel="noopener noreferrer">Pedir ayuda por WhatsApp ↗</a><p class="sub" style="margin:16px 0 10px">¿No se abre? Probá WhatsApp Web o copiá nuestro número.</p><div class="actions"><a class="btn light small" href="https://web.whatsapp.com/send?${query}" target="_top" rel="noopener noreferrer">Usar WhatsApp Web ↗</a><button class="btn light small" type="button" data-action="copy-support-number">Copiar número</button></div><p style="margin-top:15px"><strong>+56 9 3426 3907</strong></p><p class="sub" style="margin-top:15px">El mensaje queda preparado; vos decidís enviarlo. Sin celular, seguimos llevando tus premios y sellos en Caja.</p>`;
+}
 const accessRender=render;
 render=function(){if(['customer-login','customer-pin','customer-recover'].includes(view)){$('#app').innerHTML=renderAccess();$('#test-banner').hidden=!cfg?.test_mode;return}accessRender()};
 function pinFields(){return `<label class="field"><span>Elegí un PIN de 6 números</span><input name="pin" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="new-password" required></label><label class="field"><span>Repetí tu PIN</span><input name="pin_confirm" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="new-password" required></label>`}
@@ -15,7 +20,8 @@ async function enterCustomer(t){wallet=t;localStorage.setItem('gf-wallet-v1',wal
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-action]');if(!b)return;const a=b.dataset.action;
  if(a==='customer-login'){demo=false;setView('customer-login')}
  if(a==='customer-pin'){if(demo){toast('La demostración no configura un PIN real');return}setView('customer-pin')}
- if(a==='forgot-pin')modal(`<h2>Te ayudamos a volver.</h2><p style="margin:20px 0">Escribinos desde el WhatsApp del celular registrado o acercate a la tienda. Verificaremos tu cuenta y te daremos un enlace para elegir un PIN nuevo.</p><a class="btn full" href="https://wa.me/56934263907?text=${encodeURIComponent('Hola, necesito recuperar el acceso a mi Club Granero Fino.')}" target="_blank" rel="noopener">Pedir ayuda por WhatsApp ↗</a><p class="sub" style="margin-top:15px">No se envían mensajes automáticamente. Sin celular, seguimos llevando tus premios y sellos en Caja.</p>`);
+ if(a==='forgot-pin')modal(renderWhatsAppHelp());
+ if(a==='copy-support-number'){try{await navigator.clipboard.writeText('+56 9 3426 3907');toast('Número copiado')}catch{modal('<h3>Nuestro WhatsApp</h3><div class=\"code\">+56 9 3426 3907</div><p>Podés copiar el número manteniéndolo presionado.</p>')}}
  if(a==='customer-account'){try{await enterCustomer(loginAccounts[Number(b.dataset.index)].token);$('#overlay').innerHTML=''}catch(e){toast(e.message)}}
  if(a==='customer-logout'){try{if(!demo)await api('customer_logout',{wallet})}catch{}wallet=random();localStorage.setItem('gf-wallet-v1',wallet);demo=false;memberData=null;ticket=null;ticketToken=null;history.replaceState(null,'',location.pathname);setView('home')}
  if(a==='cashier-use-prize'){try{lookup=await api('lookup',{session,code:b.dataset.code});$('#overlay').innerHTML='';adminTab='redeem';render()}catch(e){toast(e.message)}}

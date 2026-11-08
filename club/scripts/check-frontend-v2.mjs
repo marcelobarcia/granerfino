@@ -27,3 +27,10 @@ console.log('Frontend: configuration fields, product rewards, completed card and
 
 const access=vm.runInContext("view=\"customer-login\";renderAccess()",context);assert.ok(access.includes("customer-login-form"));assert.ok(access.includes("name=\"pin\""));
 const register=vm.runInContext("renderRegister()",context);assert.ok(register.includes("name=\"pin_confirm\""));
+const help=vm.runInContext('renderWhatsAppHelp()',context);
+const helpLinks=[...help.matchAll(/href="([^"]+)"/g)].map(x=>new URL(x[1]));
+assert.equal(helpLinks.length,2);
+assert.deepEqual(helpLinks.map(x=>x.hostname),['api.whatsapp.com','web.whatsapp.com']);
+for(const link of helpLinks){assert.equal(link.protocol,'https:');assert.equal(link.searchParams.get('phone'),'56934263907');assert.ok(link.searchParams.get('text').includes('recuperar el acceso'))}
+assert.equal((help.match(/target="_top"/g)||[]).length,2);assert.ok(!help.includes('target="_blank"'));assert.ok(help.includes('data-action="copy-support-number"'));
+console.log('WhatsApp help links and copy fallback passed.');
