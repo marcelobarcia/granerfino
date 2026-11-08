@@ -15,10 +15,10 @@ function capability(v:unknown){const s=text(v,64);if(!/^[a-f0-9]{64}$/.test(s))t
 function amount(v:unknown){if(!Number.isInteger(v)||Number(v)<1||Number(v)>10000000)throw new Error('Ingresá un monto válido');return Number(v);}
 const configFields='test_mode,min_purchase,validity_days,daily_budget,stamp_enabled,stamp_goal,stamp_min_purchase,stamp_repeat,stamp_reward_kind,stamp_reward_title,stamp_reward_amount,stamp_reward_min,stamp_reward_days';
 const cardFields='id,cycle,test_mode,progress,goal,min_purchase,repeat_card,reward_kind,reward_title,reward_amount,reward_min,reward_days,created_at,completed_at';
-const prizeFields='prize_title,prize_amount,prize_min,prize_expires_at,redeem_code,redeemed_at,test_mode,created_at,revoked';
+const prizeFields='prize_title,prize_amount,prize_min,prize_expires_at,redeem_code,redeemed_at,test_mode,created_at,revoked,allow_same_purchase';
 async function walletContent(wh:string){
  const [t,c,b]=await Promise.all([
-  db.from('gf_tickets').select(prizeFields).eq('wallet_hash',wh).not('spun_at','is',null).order('created_at',{ascending:false}).limit(500),
+  db.from('gf_tickets').select(prizeFields).eq('wallet_hash',wh).eq('outcome','prize').not('spun_at','is',null).order('created_at',{ascending:false}).limit(500),
   db.from('gf_cards').select(cardFields).eq('wallet_hash',wh).order('cycle',{ascending:false}).limit(100),
   db.from('gf_bonus_rewards').select(prizeFields+',prize_kind').eq('wallet_hash',wh).order('created_at',{ascending:false}).limit(500)
  ]);
@@ -27,7 +27,7 @@ async function walletContent(wh:string){
 const safeTicket=(t:any)=>{const {token_hash,wallet_hash,...rest}=t;return rest;};
 async function rpc(name:string,args:any){return check(await db.rpc(name,args));}
 async function admin(s:unknown){const h=await hash(capability(s));const row=check(await db.from('gf_sessions').select('expires_at').eq('token_hash',h).maybeSingle());if(!row||new Date(row.expires_at)<new Date())throw new Error('Ingresá de nuevo a Caja');}
-function customerPin(v:unknown){if(typeof v!=='string'||!/^\d{6}$/.test(v))throw new Error('El PIN debe tener exactamente 6 números');return v;}
+function customerPin(v:unknown,legacy=false){if(typeof v!=='string'||!(legacy?/^\d{4}(?:\d{2})?$/:/^\d{4}$/).test(v))throw new Error('El PIN debe tener 4 números');return v;}
 function customerPhone(v:unknown){const p=text(v,20).replace(/[\s()+-]/g,'');if(!/^569\d{8}$/.test(p))throw new Error('Ingresá un celular chileno: +56 9 y ocho dígitos');return p;}
 async function resolveWallet(v:unknown){
  const h=await hash(capability(v));const s=check(await db.from('gf_customer_sessions').select('wallet_hash,expires_at').eq('token_hash',h).maybeSingle());
@@ -48,7 +48,7 @@ Deno.serve(async req=>{
   const ip=req.headers.get('cf-connecting-ip')||req.headers.get('x-forwarded-for')?.split(',')[0]||'unknown';
   if(['customer_login','recover_finish'].includes(action)&&!await rpc('gf_rate',{p_key:'customer-ip:'+await hash(ip),p_limit:20,p_seconds:900}))throw new Error('Demasiados intentos. Esperá 15 minutos');
   if(action==='customer_login'){
-   const phone=customerPhone(b.phone),pin=customerPin(b.pin);
+   const phone=customerPhone(b.phone),pin=customerPin(b.pin,true);
    if(!await rpc('gf_rate',{p_key:'customer-phone:'+await hash(phone),p_limit:5,p_seconds:900}))throw new Error('Demasiados intentos. Esperá 15 minutos o pedí ayuda en la tienda');
    const rows=check(await db.from('gf_wallets').select('token_hash,name,created_at,customer_pin_hash,customer_pin_salt').eq('phone',phone).not('customer_pin_hash','is',null).order('created_at').limit(20));
    const matches=[];
@@ -74,7 +74,7 @@ Deno.serve(async req=>{
   if(['login','setup'].includes(action)&&!await rpc('gf_rate',{p_key:'login:'+await hash(ip),p_limit:12,p_seconds:900}))throw new Error('Demasiados intentos. Esperá 15 minutos');
   if(action==='config'){
    const c=check(await db.from('gf_config').select(configFields).eq('id',true).single());
-   const prizes=check(await db.from('gf_prizes').select('id,title,amount,min_purchase,weight').eq('active',true).order('id'));
+   const prizes=check(await db.from('gf_prizes').select('id,title,amount,min_purchase,weight,kind').eq('active',true).order('id'));
    return new Response(JSON.stringify({...c,prizes}),{headers:cors});
   }
   if(action==='setup'){
@@ -104,7 +104,7 @@ Deno.serve(async req=>{
    const id=text(b.member_id,36);if(!/^[a-f0-9-]{36}$/i.test(id))throw new Error('Miembro no válido');
    const w=check(await db.from('gf_wallets').select('token_hash,name,member_code').eq('member_id',id).maybeSingle());
    if(!w)throw new Error('Miembro no encontrado');
-   const result=await rpc('gf_assisted_purchase',{p_wallet:w.token_hash,p_receipt:text(b.receipt,60),p_amount:amount(b.amount),p_token:await hash(token()),p_random:crypto.getRandomValues(new Uint32Array(1))[0]/4294967296,p_code:'GF-'+token().slice(0,12).toUpperCase()});
+   const result=await rpc('gf_assisted_purchase',{p_wallet:w.token_hash,p_receipt:typeof b.receipt==='string'&&b.receipt.trim()?text(b.receipt,60):'COMPRA-'+token().slice(0,12).toUpperCase(),p_amount:amount(b.amount),p_token:await hash(token()),p_random:crypto.getRandomValues(new Uint32Array(1))[0]/4294967296,p_code:'GF-'+token().slice(0,12).toUpperCase()});
    return new Response(JSON.stringify({...result,name:w.name,member_code:w.member_code}),{headers:cors});
   }
   if(action==='recovery_link'){
@@ -123,9 +123,13 @@ Deno.serve(async req=>{
   if(action==='settings'){
    const min=amount(b.min_purchase),days=amount(b.validity_days),budget=amount(b.daily_budget);
    if(days>90||typeof b.test_mode!=='boolean')throw new Error('Configuración no válida');
-   if(!Array.isArray(b.prizes)||b.prizes.length!==3)throw new Error('Revisá los tres premios');
-   for(const p of b.prizes){if(![1,2,3].includes(p.id)||!Number.isInteger(p.weight)||p.weight<0||p.weight>10000||amount(p.min_purchase)<amount(p.amount))throw new Error('Revisá montos y probabilidades');}
-   if(new Set(b.prizes.map((p:any)=>p.id)).size!==3||!b.prizes.some((p:any)=>p.weight>0)||!b.prizes.some((p:any)=>p.amount<=budget&&p.weight>0))throw new Error('Debe haber premios disponibles dentro del presupuesto');
+   if(!Array.isArray(b.prizes)||![3,4].includes(b.prizes.length))throw new Error('Revisá los resultados de la ruleta');
+   for(const p of b.prizes){
+    if(![1,2,3,4].includes(p.id)||!Number.isInteger(p.weight)||p.weight<0||p.weight>10000)throw new Error('Revisá las probabilidades');
+    if(p.id===4){p.amount=0;p.min_purchase=0;p.title='Sigue participando';}
+    else if(amount(p.min_purchase)<amount(p.amount))throw new Error('El mínimo debe cubrir el descuento');
+   }
+   if(new Set(b.prizes.map((p:any)=>p.id)).size!==b.prizes.length||!b.prizes.some((p:any)=>p.weight>0))throw new Error('Debe haber al menos un resultado con probabilidad positiva');
    const current=check(await db.from('gf_config').select(configFields).eq('id',true).single());
    const config={...current,test_mode:b.test_mode,min_purchase:min,validity_days:days,daily_budget:budget};
    for(const key of Object.keys(current).filter(k=>k.startsWith('stamp_')))if(b[key]!==undefined)config[key]=b[key];
@@ -136,15 +140,15 @@ Deno.serve(async req=>{
    if(config.stamp_reward_kind==='discount'){
     amount(config.stamp_reward_amount);if(config.stamp_reward_min<config.stamp_reward_amount)throw new Error('El mínimo del premio especial debe cubrir su descuento');
    }else config.stamp_reward_amount=0;
-   await rpc('gf_settings',{p_config:config,p_prizes:b.prizes.map((p:any)=>({...p,title:`$${p.amount.toLocaleString('es-CL')} de descuento`}))});
+   await rpc('gf_settings',{p_config:config,p_prizes:b.prizes.map((p:any)=>({...p,title:p.id===4?'Sigue participando':`$${p.amount.toLocaleString('es-CL')} de descuento`}))});
    return new Response('{"ok":true}',{headers:cors});
   }
   if(action==='create'){
-   const receipt=text(b.receipt,60),purchase=amount(b.amount),c=check(await db.from('gf_config').select('*').eq('id',true).single());
+   const receipt=typeof b.receipt==='string'&&b.receipt.trim()?text(b.receipt,60):'COMPRA-'+token().slice(0,12).toUpperCase(),purchase=amount(b.amount),c=check(await db.from('gf_config').select('*').eq('id',true).single());
    if(purchase<c.min_purchase)throw new Error('La compra no alcanza el mínimo para girar');
    const t=token();const r=await db.from('gf_tickets').insert({token_hash:await hash(t),receipt,purchase_amount:purchase,test_mode:c.test_mode,expires_at:new Date(Date.now()+7*86400000).toISOString()});
    if(r.error?.code==='23505')throw new Error('Ese comprobante ya tiene un QR. No se generó otro');check(r);
-   return new Response(JSON.stringify({token:t,test_mode:c.test_mode}),{headers:cors});
+   return new Response(JSON.stringify({token:t,test_mode:c.test_mode,receipt}),{headers:cors});
   }
   if(action==='revoke'){
    const r=check(await db.from('gf_tickets').update({revoked:true}).eq('receipt',text(b.receipt,60)).eq('test_mode',Boolean(b.test_mode)).is('spun_at',null).select('receipt'));

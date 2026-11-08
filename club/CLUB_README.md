@@ -1,4 +1,14 @@
-# Club Granero Fino · v3
+# Club Granero Fino · v4
+
+## Cambios v4: premio inmediato, resultado sin premio y audio
+
+- Los folios de compra se generan automáticamente al crear QR o registrar una compra asistida. El comprobante real es opcional; si se carga, evita duplicar el giro de ese comprobante. El cupón ganador también se genera automáticamente en servidor y se ve inmediatamente, antes de registrarse. “Sigue participando” no emite cupón.
+- Giros nuevos: premios canjeables en la misma compra o posteriormente dentro de su vigencia. Se filtran por el monto mínimo de la compra actual y presupuesto; el resultado incluye la lista exacta de opciones vigentes usadas por el servidor. La rueda se dibuja con esas opciones y sus pesos. Los cupones anteriores mantienen sus condiciones de nueva compra.
+- Resultado fijo de catálogo id 4: “Sigue participando”, valor cero, probabilidad configurable. Valor inicial de prueba: peso 25 frente a 60/30/10, equivalente a 20% cuando están disponibles todos. Con menor monto o presupuesto cambia el conjunto elegible. La compra válida suma el sello aunque no gane descuento. No se muestra como cupón de $0.
+- Un beneficio por comprobante entre cupón y premio de tarjeta. No se vuelve a canjear un cupón. Los premios especiales nuevos también admiten la compra actual, respetando mínimo.
+- PIN nuevos de 4 dígitos; los anteriores de 6 se aceptan al ingresar y pueden cambiarse. Se conservan límites de intentos.
+- Audio: archivos WAV locales con volumen normalizado y reproducción de medios para compatibilidad móvil. Sonido de giro, festejo al ganar y tono breve para resultado sin premio. El botón “Probar sonido” activa el audio explícitamente. El dispositivo controla el volumen final; no se reproduce automáticamente al cargar.
+- Migración aplicada: `current-purchase-and-no-prize.sql`. Regresión de servidor en `scripts/check-current-purchase.sql` (revertida), API en `scripts/check-v4-api.mjs` y audio/representación en las comprobaciones de frontend.
 
 ## Sonidos, acceso de clientes y atención sin celular
 

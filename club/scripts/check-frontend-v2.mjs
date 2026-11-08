@@ -15,6 +15,8 @@ vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
 vm.runInContext(fs.readFileSync('dist/club-v2.js','utf8').replace(/\ninit\(\);\s*$/,''),context);
 vm.runInContext(`dash={config:{test_mode:true,min_purchase:3000,validity_days:14,daily_budget:10000,stamp_enabled:true,stamp_goal:5,stamp_min_purchase:3000,stamp_repeat:true,stamp_reward_kind:'product',stamp_reward_title:'Mix <especial>',stamp_reward_amount:0,stamp_reward_min:10000,stamp_reward_days:30},prizes:[{id:1,amount:300,min_purchase:7000,weight:60},{id:2,amount:500,min_purchase:10000,weight:30},{id:3,amount:1000,min_purchase:15000,weight:10}],tickets:[]}; cfg=dash.config; session='test-session';`,context);
 vm.runInContext(fs.readFileSync('dist/customer-access.js','utf8').replace(/\ninit\(\);\s*$/,''),context);
+vm.runInContext(fs.readFileSync('dist/rules-v4.js','utf8'),context);
+vm.runInContext("dash.prizes.push({id:4,title:'Sigue participando',kind:'none',amount:0,min_purchase:0,weight:25});cfg.prizes=dash.prizes;",context);
 const settings=vm.runInContext('renderSettings()',context);
 for(const field of ['stamp_enabled','stamp_goal','stamp_min_purchase','stamp_repeat','stamp_reward_kind','stamp_reward_title','stamp_reward_amount','stamp_reward_min','stamp_reward_days'])assert.ok(settings.includes('name="'+field+'"'),field);
 assert.ok(settings.includes('Mix &lt;especial&gt;'));
@@ -34,3 +36,10 @@ assert.deepEqual(helpLinks.map(x=>x.hostname),['api.whatsapp.com','web.whatsapp.
 for(const link of helpLinks){assert.equal(link.protocol,'https:');assert.equal(link.searchParams.get('phone'),'56934263907');assert.ok(link.searchParams.get('text').includes('recuperar el acceso'))}
 assert.equal((help.match(/target="_top"/g)||[]).length,2);assert.ok(!help.includes('target="_blank"'));assert.ok(help.includes('data-action="copy-support-number"'));
 console.log('WhatsApp help links and copy fallback passed.');
+
+assert.ok(settings.includes('name="weight_4"'));
+const fourPin=vm.runInContext('pinFields()',context);assert.ok(fourPin.includes('minlength="4"'));
+vm.runInContext("ticket={outcome:'none',test_mode:true,prize_amount:0,stamp_earned:false};",context);
+const noPrize=vm.runInContext('renderResult()',context);assert.ok(noPrize.includes('Sigue participando'));assert.ok(!noPrize.includes('$0'));assert.ok(!noPrize.includes('class="code"'));
+const segments=vm.runInContext('wheelSegments()',context);assert.equal(Math.round(segments.reduce((s,p)=>s+p.span,0)),360);assert.ok(segments.some(p=>p.id===4));
+console.log('Four-digit PIN, no-prize result, configurable weight and wheel segments passed.');

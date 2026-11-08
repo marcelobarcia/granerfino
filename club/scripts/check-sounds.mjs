@@ -1,17 +1,9 @@
 import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';
-let contexts=0,started=[],stopped=0,buttons=[];const preferences=new Map();
-class AudioContext {
- constructor(){contexts++;this.state='running';this.currentTime=2;this.destination={}}
- createGain(){return {gain:{value:0,setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){},disconnect(){}}}
- createOscillator(){return {frequency:{setValueAtTime(){}},connect(){},disconnect(){},start(t){started.push(t)},stop(){stopped++}}}
- resume(){this.state='running';return Promise.resolve()}
-}
-const doc={querySelector:()=>({append(b){buttons.push(b)}}),querySelectorAll:()=>buttons,createElement:()=>({handlers:{},addEventListener(k,f){this.handlers[k]=f},setAttribute(){}}),head:{append(){}},addEventListener(){}};
-const window={AudioContext};
-vm.runInNewContext(fs.readFileSync('dist/sounds.js','utf8'),{window,document:doc,localStorage:{getItem:k=>preferences.get(k),setItem:(k,v)=>preferences.set(k,v)}});
-const audio=window.GraneroAudio;assert.equal(contexts,0,'No autoplay before a gesture');assert.equal(buttons.length,2);
-await audio.unlock();audio.spin();assert.ok(started.length>25);assert.ok(started.every((v,i)=>i===0||v>started[i-1]));assert.ok((started.at(-1)-started.at(-2))>(started[1]-started[0]),'Ticks slow down');
-const before=started.length;audio.celebrate();assert.equal(started.length-before,7);assert.ok(stopped>0);
-buttons[0].handlers.click();assert.equal(audio.enabled,false);assert.equal(preferences.get('gf-sound-enabled'),'false');const count=started.length;audio.spin();audio.celebrate();assert.equal(started.length,count,'Mute prevents audio');
-buttons[1].handlers.click();assert.equal(audio.enabled,true);assert.equal(contexts,1);audio.celebrate();assert.equal(started.length-count,7);
-console.log('Sound checks passed: gesture, slowing ticks, celebration, mute and saved preference.');
+let created=0,played=[],buttons=[],paused=0;const preferences=new Map();
+class Audio {constructor(){created++;this.src=''}setAttribute(){}play(){played.push(this.src);return Promise.resolve()}pause(){paused++}}
+const doc={baseURI:'https://example.test/club/',querySelector:()=>({append(b){buttons.push(b)}}),querySelectorAll:()=>buttons,createElement:()=>({handlers:{},addEventListener(k,f){this.handlers[k]=f},setAttribute(){}}),head:{append(){}},addEventListener(){}};
+const window={};vm.runInNewContext(fs.readFileSync('dist/sounds.js','utf8'),{window,document:doc,Audio,URL,location:{href:doc.baseURI},localStorage:{getItem:k=>preferences.get(k),setItem:(k,v)=>preferences.set(k,v)}});
+const a=window.GraneroAudio;assert.equal(created,0);await a.unlock();await a.spin();assert.ok(played.at(-1).endsWith('/club/audio/spin.wav'));await a.finish(true);assert.ok(played.at(-1).endsWith('/win.wav'));await a.finish(false);assert.ok(played.at(-1).endsWith('/try-again.wav'));
+buttons[0].handlers.click();const n=played.length;await a.spin();assert.equal(played.length,n);assert.equal(preferences.get('gf-sound-enabled'),'false');await a.test();assert.equal(a.enabled,true);assert.ok(played.length>n);assert.ok(paused>0);
+for(const f of ['spin','win','try-again']){const b=fs.readFileSync('dist/audio/'+f+'.wav');assert.equal(b.toString('ascii',0,4),'RIFF');assert.equal(b.toString('ascii',8,12),'WAVE');let peak=0;for(let i=44;i<b.length;i+=2)peak=Math.max(peak,Math.abs(b.readInt16LE(i)));assert.ok(peak>15000,f+' must contain audible-level samples')}
+console.log('Media audio, playable WAV files, gesture start, mute and test sound passed.');
