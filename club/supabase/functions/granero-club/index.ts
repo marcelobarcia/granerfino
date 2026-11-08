@@ -91,7 +91,7 @@ Deno.serve(async req=>{
    return new Response(JSON.stringify({session}),{headers:cors});
   }
   if(action==='logout'){await admin(b.session);check(await db.from('gf_sessions').delete().eq('token_hash',await hash(b.session)));return new Response('{"ok":true}',{headers:cors});}
-  if(['dashboard','create','lookup','redeem','settings','revoke','members','member_detail','recovery_link','assisted_create','assisted_purchase','pending_prizes'].includes(action))await admin(b.session);
+  if(['dashboard','create','lookup','redeem','settings','revoke','members','member_detail','recovery_link','assisted_create','assisted_purchase','pending_prizes','cashier_visit'].includes(action))await admin(b.session);
   if(action==='pending_prizes'){
    const page=Number(b.page??0),size=Number(b.size??25);if(typeof b.test_mode!=='boolean'||!Number.isInteger(page)||page<0||!Number.isInteger(size)||size<1||size>100)throw new Error('Página no válida');
    return new Response(JSON.stringify(await rpc('gf_pending_prizes',{p_mode:b.test_mode,p_search:typeof b.search==='string'?b.search.trim().slice(0,100):'',p_page:page,p_size:size})),{headers:cors});
@@ -103,6 +103,12 @@ Deno.serve(async req=>{
    const c=check(await db.from('gf_config').select('test_mode').eq('id',true).single());
    const w=check(await db.from('gf_wallets').insert({token_hash:await hash(token()),name,phone,marketing:b.marketing===true,assisted:true,registration_test_mode:c.test_mode}).select('member_id,member_code,name,phone').single());
    return new Response(JSON.stringify(w),{headers:cors});
+  }
+  if(action==='cashier_visit'){
+   const id=text(b.member_id,36), op=await hash(capability(b.operation));
+   const w=check(await db.from('gf_wallets').select('token_hash,name,member_code').eq('member_id',id).single());
+   const r=await rpc('gf_cashier_visit',{p_wallet:w.token_hash,p_token:op,p_random:crypto.getRandomValues(new Uint32Array(1))[0]/4294967296,p_code:'GF-'+token().slice(0,12).toUpperCase()});
+   return new Response(JSON.stringify({...r,name:w.name,member_code:w.member_code}),{headers:cors});
   }
   if(action==='assisted_purchase'){
    const id=text(b.member_id,36);if(!/^[a-f0-9-]{36}$/i.test(id))throw new Error('Miembro no válido');

@@ -16,7 +16,7 @@ const API='https://tmzglobhelevkwerjpom.supabase.co/functions/v1/granero-club';
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),money=n=>'$'+Number(n).toLocaleString('es-CL'),date=s=>new Date(s).toLocaleDateString('es-CL',{day:'numeric',month:'short',year:'numeric'});
 const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(32))).map(x=>x.toString(16).padStart(2,'0')).join('');
 let wallet=localStorage.getItem('gf-wallet-v1');if(!wallet){wallet=random();localStorage.setItem('gf-wallet-v1',wallet)}
-let session=sessionStorage.getItem('gf-admin-v1'),cfg=null,view='home',ticket=null,demo=false,rot=0,dash=null,lookup=null,issued=null,busy=false,filter='available',adminTab='create',memberData=null;
+let session=sessionStorage.getItem('gf-admin-v1'),cfg=null,view='home',ticket=null,demo=false,rot=0,dash=null,lookup=null,issued=null,busy=false,filter='available',adminTab='members',memberData=null;
 const qs=new URLSearchParams(location.search);let ticketToken=qs.get('giro');let setupKey=new URLSearchParams(location.hash.slice(1)).get('activar');let restored=new URLSearchParams(location.hash.slice(1)).get('club');
 if(restored&&/^[a-f0-9]{64}$/.test(restored)){wallet=restored;localStorage.setItem('gf-wallet-v1',wallet);history.replaceState(null,'',location.pathname+'?premios=1');}
 if(setupKey)history.replaceState(null,'',location.pathname+'?caja=1');
@@ -74,4 +74,4 @@ document.addEventListener('submit',async e=>{e.preventDefault();const form=e.tar
  }catch(e){error(e)}finally{if(b)b.disabled=false}});
 document.addEventListener('click',async e=>{if(e.target.closest('[data-action="activate-confirm"]')){const b=e.target.closest('button');b.disabled=true;try{await api('settings',window.pendingSettings);$('#overlay').innerHTML='';await refreshAdmin();toast('Campaña activada')}catch(e){toast(e.message);b.disabled=false}}});
 async function init(){try{cfg=await api('config');if(setupKey||qs.has('caja')){await openAdmin();return}if(qs.has('premios')||restored){await openWallet();return}if(ticketToken){ticket=await api('ticket',{token:ticketToken,wallet});if(ticket.spun_at){const w=await api('wallet',{wallet});if(w.member){memberData=w;setView('wallet')}else setView('result')}else setView('spin')}else setView('home')}catch(e){setView('home');error(e)}}
-</script><script src="./club-v2.js"></script><script src="./customer-access.js"></script><script src="./sounds.js"></script><script src="./rules-v4.js"></script><script src="./quick-redemption.js"></script></body></html>
+</script><script src="./club-v2.js"></script><script src="./customer-access.js"></script><script src="./sounds.js"></script><script src="./rules-v4.js"></script><script src="./quick-redemption.js"></script><script src="./cashier.js"></script></body></html>
